@@ -1,0 +1,10 @@
+{
+    "appenders": [{
+        "type": "console",
+        "layout": {
+            "type": "pattern",
+            "pattern": "%[%d{yyyy-MM-ddThh:mm:ss.SSS} %p %c -%] %m"
+        }
+    }],
+    "replaceConsole": true
+}

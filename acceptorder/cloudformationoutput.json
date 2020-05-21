@@ -1,0 +1,32 @@
+{
+    "psOrdersStreamArn": {
+        "Description": "PS Orders Stream Name",
+        "Value": {
+            "Fn::GetAtt": [
+                "psOrdersStream",
+                "Arn"
+            ]
+        }
+    },
+    "psContactssStreamArn": {
+        "Description": "PS Orders Stream Name",
+        "Value": {
+            "Fn::GetAtt": [
+                "psContactsStream",
+                "Arn"
+            ]
+        }
+    },
+    "psDataS3BucketRef": {
+        "Description": "PS Contacts S3 Name",
+        "Value": {
+            "Ref": "psDataS3Bucket"
+        }
+    },
+    "psAuditOrdersTableRef": {
+        "Description": "PS Orders Audit Table",
+        "Value": {
+            "Ref": "psAuditOrdersTable"
+        }
+    }
+}

@@ -1,0 +1,1162 @@
+{
+    "psOrdersStream": {
+        "Type": "AWS::Kinesis::Stream",
+        "Properties": {
+            "Name": "${file(./config.json):psOrdersStreamName}",
+            "ShardCount": "${file(./config.json):psOrdersStreamShardCount}"
+        },
+        "DependsOn": "IamRolePSReadOrderKinesisStream"
+    },
+    "psContactsStream": {
+        "Type": "AWS::Kinesis::Stream",
+        "Properties": {
+            "Name": "${file(./config.json):psContactsStreamName}",
+            "ShardCount": "${file(./config.json):psContactsStreamShardCount}"
+        }
+    },
+    "psProductsStream": {
+        "Type": "AWS::Kinesis::Stream",
+        "Properties": {
+            "Name": "${file(./config.json):psProductsStreamName}",
+            "ShardCount": "${file(./config.json):psProductsStreamShardCount}"
+        }
+    },
+    "psAuditOrdersTable": {
+        "Type": "AWS::DynamoDB::Table",
+        "Properties": {
+            "TableName": "${file(./config.json):OrdersTableName}",
+            "KeySchema": [{
+                "AttributeName": "Id",
+                "KeyType": "HASH"
+            }],
+            "AttributeDefinitions": [{
+                    "AttributeName": "Id",
+                    "AttributeType": "S"
+                },
+                {
+                    "AttributeName": "OrderId",
+                    "AttributeType": "N"
+                },
+                {
+                    "AttributeName": "ShopifyCreatedDate",
+                    "AttributeType": "S"
+                },
+                {
+                    "AttributeName": "ShopifyCancelledDate",
+                    "AttributeType": "S"
+                }
+            ],
+            "GlobalSecondaryIndexes": [{
+                    "IndexName": "${file(./config.json):OrdersTableOrderIdIndex}",
+                    "Projection": {
+                        "ProjectionType": "INCLUDE",
+                        "NonKeyAttributes": [
+                            "ShopifyCancelledFlag",
+                            "PSSent"
+                        ]
+                    },
+                    "ProvisionedThroughput": {
+                        "WriteCapacityUnits": 5,
+                        "ReadCapacityUnits": 7
+                    },
+                    "KeySchema": [{
+                        "KeyType": "HASH",
+                        "AttributeName": "OrderId"
+                    }]
+                },
+                {
+                    "IndexName": "${file(./config.json):OrdersTableShopifyCreatedDateIndex}",
+                    "Projection": {
+                        "ProjectionType": "INCLUDE",
+                        "NonKeyAttributes": [
+                            "ShopifyCancelledFlag",
+                            "OrderId"
+                        ]
+                    },
+                    "ProvisionedThroughput": {
+                        "WriteCapacityUnits": 5,
+                        "ReadCapacityUnits": 16
+                    },
+                    "KeySchema": [{
+                        "KeyType": "HASH",
+                        "AttributeName": "ShopifyCreatedDate"
+                    }]
+                },
+                {
+                    "IndexName": "${file(./config.json):OrdersTableShopifyCancelledDateIndex}",
+                    "Projection": {
+                        "ProjectionType": "INCLUDE",
+                        "NonKeyAttributes": [
+                            "ShopifyCancelledFlag",
+                            "OrderId"
+                        ]
+                    },
+                    "ProvisionedThroughput": {
+                        "WriteCapacityUnits": 5,
+                        "ReadCapacityUnits": 16
+                    },
+                    "KeySchema": [{
+                        "KeyType": "HASH",
+                        "AttributeName": "ShopifyCancelledDate"
+                    }]
+                }
+            ],
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 5,
+                "WriteCapacityUnits": 5
+            }
+        }
+    },
+    "psAuditSchedulerTable": {
+        "Type": "AWS::DynamoDB::Table",
+        "Properties": {
+            "TableName": "${file(./config.json):AuditSchedulerTableName}",
+            "KeySchema": [{
+                    "AttributeName": "Id",
+                    "KeyType": "HASH"
+                },
+                {
+                    "AttributeName": "LastRunDate",
+                    "KeyType": "RANGE"
+                }
+            ],
+            "AttributeDefinitions": [{
+                    "AttributeName": "Id",
+                    "AttributeType": "S"
+                },
+                {
+                    "AttributeName": "LastRunDate",
+                    "AttributeType": "S"
+                }
+            ],
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 1,
+                "WriteCapacityUnits": 1
+            }
+        }
+    },
+    "psProductsInfoTable": {
+        "Type": "AWS::DynamoDB::Table",
+        "Properties": {
+            "TableName": "${file(./config.json):ProductsTableName}",
+            "KeySchema": [{
+                "AttributeName": "Id",
+                "KeyType": "HASH"
+            }],
+            "AttributeDefinitions": [{
+                    "AttributeName": "Id",
+                    "AttributeType": "S"
+                },
+                {
+                    "AttributeName": "ProductType",
+                    "AttributeType": "S"
+                }
+            ],
+            "GlobalSecondaryIndexes": [{
+                "IndexName": "${file(./config.json):ProductsTableProductTypeIndex}",
+                "Projection": {
+                    "ProjectionType": "INCLUDE",
+                    "NonKeyAttributes": [
+                        "Variants",
+                        "collection_dtl_featured_month"
+                    ]
+                },
+                "ProvisionedThroughput": {
+                    "WriteCapacityUnits": 1,
+                    "ReadCapacityUnits": 1
+                },
+                "KeySchema": [{
+                    "KeyType": "HASH",
+                    "AttributeName": "ProductType"
+                }]
+            }],
+            "ProvisionedThroughput": {
+                "ReadCapacityUnits": 1,
+                "WriteCapacityUnits": 1
+            }
+        }
+    },
+    "SKUSubscription": {
+        "Type": "AWS::SNS::Topic",
+        "Properties": {
+            "Subscription": [{
+                "Endpoint": "${file(./config.json):EmailServiceToAddress}",
+                "Protocol": "email"
+            }]
+        }
+    },
+    "AcceptOrderErrorSNS": {
+        "Type": "AWS::SNS::Topic",
+        "Properties": {
+            "Subscription": [{
+                    "Endpoint": "${file(./config.json):EmailServiceToAddress}",
+                    "Protocol": "email"
+                },
+                {
+                    "Endpoint": { "Fn::GetAtt": ["AcceptOrderErrorSQS", "Arn"] },
+                    "Protocol": "sqs"
+                }
+            ]
+        }
+    },
+    "AcceptOrderErrorSQS": {
+        "Type": "AWS::SQS::Queue"
+    },
+    "psDataS3Bucket": {
+        "Type": "AWS::S3::Bucket"
+    },
+    "IamRoleLambdaExecution": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSPostOrderKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSReadOrderKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSSaveOrderKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSPostContactKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSReadContactKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSReadProductKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSSaveProductKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSFetchStock": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSOrdersFromShopify": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSPostProductKinesisStream": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSOrdersToS3": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRolePSSKUSubscription": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamRoleCuratorEnrollment": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+            "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": [
+                            "lambda.amazonaws.com"
+                        ]
+                    },
+                    "Action": [
+                        "sts:AssumeRole"
+                    ]
+                }]
+            },
+            "Path": "/"
+        }
+    },
+    "IamPolicyLambdaExecution": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyLambdaExecution",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:CreateLogGroup",
+                            "logs:CreateLogStream"
+                        ],
+                        "Resource": "arn:aws:logs:us-west-2:*:*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "logs:PutLogEvents"
+                        ],
+                        "Resource": "arn:aws:logs:us-west-2:*:*"
+                    }
+                ]
+            },
+            "Roles": [{
+                    "Ref": "IamRoleLambdaExecution"
+                },
+                {
+                    "Ref": "IamRolePSPostOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSFetchStock"
+                },
+                {
+                    "Ref": "IamRolePSPostContactKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadContactKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSOrdersFromShopify"
+                },
+                {
+                    "Ref": "IamRolePSSaveOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSOrdersToS3"
+                },
+                {
+                    "Ref": "IamRolePSPostProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSSKUSubscription"
+                },
+                {
+                    "Ref": "IamRolePSSaveProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRoleCuratorEnrollment"
+                }
+            ]
+        }
+    },
+    "IamPolicyPSAcceptOrderErrorSNS": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSAcceptOrderErrorSNS",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "*",
+                    "Resource": [{
+                            "Fn::Join": [
+                                "", [{
+                                    "Ref": "AcceptOrderErrorSNS"
+                                }]
+                            ]
+                        },
+                        {
+                            "Fn::Join": [
+                                "", [{
+                                        "Ref": "AcceptOrderErrorSNS"
+                                    },
+                                    "/*"
+                                ]
+                            ]
+                        }
+                    ]
+                }]
+            },
+            "Roles": [{
+                "Ref": "IamRolePSPostOrderKinesisStream"
+            }]
+        }
+    },
+    "IamPolicyPSSKUSubscription": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSSKUSubscription",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "*",
+                    "Resource": [{
+                            "Fn::Join": [
+                                "", [{
+                                    "Ref": "SKUSubscription"
+                                }]
+                            ]
+                        },
+                        {
+                            "Fn::Join": [
+                                "", [{
+                                        "Ref": "SKUSubscription"
+                                    },
+                                    "/*"
+                                ]
+                            ]
+                        }
+                    ]
+                }]
+            },
+            "Roles": [{
+                "Ref": "IamRolePSSKUSubscription"
+            }]
+        }
+    },
+    "IamPolicyPSDecryptKeys": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSDecryptKeys",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "kms:DescribeKey",
+                        "kms:Decrypt"
+                    ],
+                    "Resource": "arn:aws:kms:us-west-2:781812356504:key/e7473098-0d0b-470c-80ba-83b8ccc999f5"
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSPostOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSFetchStock"
+                },
+                {
+                    "Ref": "IamRolePSPostContactKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadContactKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSOrdersFromShopify"
+                },
+                {
+                    "Ref": "IamRolePSPostProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSSKUSubscription"
+                }
+            ]
+        }
+    },
+    "IamPolicyPostOrderKinesisStream": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSPostOrderKinesis",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "kinesis:PutRecord",
+                        "kinesis:GetRecords",
+                        "kinesis:GetShardIterator",
+                        "kinesis:DescribeStream",
+                        "kinesis:ListStreams"
+                    ],
+                    "Resource": {
+                        "Fn::Join": [
+                            "", [
+                                "arn:aws:kinesis:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":",
+                                {
+                                    "Ref": "AWS::AccountId"
+                                },
+                                ":stream/",
+                                {
+                                    "Ref": "psOrdersStream"
+                                }
+                            ]
+                        ]
+                    }
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSPostOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSOrdersFromShopify"
+                }
+            ]
+        }
+    },
+    "IamPolicyReadOrderKinesisStream": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSReadOrderKinesis",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "kinesis:PutRecord",
+                        "kinesis:GetRecords",
+                        "kinesis:GetShardIterator",
+                        "kinesis:DescribeStream",
+                        "kinesis:ListStreams"
+                    ],
+                    "Resource": {
+                        "Fn::Join": [
+                            "", [
+                                "arn:aws:kinesis:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":",
+                                {
+                                    "Ref": "AWS::AccountId"
+                                },
+                                ":stream/",
+                                {
+                                    "Ref": "psOrdersStream"
+                                }
+                            ]
+                        ]
+                    }
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSReadOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSSaveOrderKinesisStream"
+                }
+            ]
+        }
+    },
+    "IamPolicyPostContactKinesisStream": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSPostContactKinesis",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "kinesis:PutRecord",
+                        "kinesis:GetRecords",
+                        "kinesis:GetShardIterator",
+                        "kinesis:DescribeStream",
+                        "kinesis:ListStreams"
+                    ],
+                    "Resource": {
+                        "Fn::Join": [
+                            "", [
+                                "arn:aws:kinesis:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":",
+                                {
+                                    "Ref": "AWS::AccountId"
+                                },
+                                ":stream/",
+                                {
+                                    "Ref": "psContactsStream"
+                                }
+                            ]
+                        ]
+                    }
+                }]
+            },
+            "Roles": [{
+                "Ref": "IamRolePSPostContactKinesisStream"
+            }]
+        }
+    },
+    "IamPolicyReadContactKinesisStream": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSPostContactKinesis",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "kinesis:PutRecord",
+                        "kinesis:GetRecords",
+                        "kinesis:GetShardIterator",
+                        "kinesis:DescribeStream",
+                        "kinesis:ListStreams"
+                    ],
+                    "Resource": {
+                        "Fn::Join": [
+                            "", [
+                                "arn:aws:kinesis:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":",
+                                {
+                                    "Ref": "AWS::AccountId"
+                                },
+                                ":stream/",
+                                {
+                                    "Ref": "psContactsStream"
+                                }
+                            ]
+                        ]
+                    }
+                }]
+            },
+            "Roles": [{
+                "Ref": "IamRolePSReadContactKinesisStream"
+            }]
+        }
+    },
+    "IamPolicyPostDataS3Bucket": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPostDataS3Bucket",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "s3:*",
+                    "Resource": [{
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:s3:::",
+                                    {
+                                        "Ref": "psDataS3Bucket"
+                                    }
+                                ]
+                            ]
+                        },
+                        {
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:s3:::",
+                                    {
+                                        "Ref": "psDataS3Bucket"
+                                    },
+                                    "/*"
+                                ]
+                            ]
+                        }
+                    ]
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSReadContactKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSPostOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSSaveOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSOrdersToS3"
+                },
+                {
+                    "Ref": "IamRolePSSaveProductKinesisStream"
+                }
+            ]
+        }
+    },
+    "IamPolicyPostAuditOrderTable": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPostAuditOrderTable",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "dynamodb:*",
+                    "Resource": [{
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:dynamodb:",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ":",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    ":table/",
+                                    {
+                                        "Ref": "psAuditOrdersTable"
+                                    }
+                                ]
+                            ]
+                        },
+                        {
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:dynamodb:",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ":",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    ":table/",
+                                    {
+                                        "Ref": "psAuditOrdersTable"
+                                    },
+                                    "/*"
+                                ]
+                            ]
+                        }
+                    ]
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSReadOrderKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadContactKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSOrdersFromShopify"
+                },
+                {
+                    "Ref": "IamRolePSOrdersToS3"
+                }
+            ]
+        }
+    },
+    "IamPolicyPostAuditScheduleTable": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPostAuditScheduleTable",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "dynamodb:*",
+                    "Resource": [{
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:dynamodb:",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ":",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    ":table/",
+                                    {
+                                        "Ref": "psAuditSchedulerTable"
+                                    }
+                                ]
+                            ]
+                        },
+                        {
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:dynamodb:",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ":",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    ":table/",
+                                    {
+                                        "Ref": "psAuditSchedulerTable"
+                                    },
+                                    "/*"
+                                ]
+                            ]
+                        }
+                    ]
+                }]
+            },
+            "Roles": [{
+                "Ref": "IamRolePSOrdersFromShopify"
+            }]
+        }
+    },
+    "IamPolicyPostAuditProductsTable": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPostAuditProductsTable",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": "dynamodb:*",
+                    "Resource": [{
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:dynamodb:",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ":",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    ":table/",
+                                    {
+                                        "Ref": "psProductsInfoTable"
+                                    }
+                                ]
+                            ]
+                        },
+                        {
+                            "Fn::Join": [
+                                "", [
+                                    "arn:aws:dynamodb:",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    ":",
+                                    {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    ":table/",
+                                    {
+                                        "Ref": "psProductsInfoTable"
+                                    },
+                                    "/*"
+                                ]
+                            ]
+                        }
+                    ]
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSReadProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSSKUSubscription"
+                }
+            ]
+        }
+    },
+    "IamPolicyPostProductKinesisStream": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSProductContactKinesis",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "kinesis:PutRecord",
+                        "kinesis:GetRecords",
+                        "kinesis:GetShardIterator",
+                        "kinesis:DescribeStream",
+                        "kinesis:ListStreams"
+                    ],
+                    "Resource": {
+                        "Fn::Join": [
+                            "", [
+                                "arn:aws:kinesis:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":",
+                                {
+                                    "Ref": "AWS::AccountId"
+                                },
+                                ":stream/",
+                                {
+                                    "Ref": "psProductsStream"
+                                }
+                            ]
+                        ]
+                    }
+                }]
+            },
+            "Roles": [{
+                    "Ref": "IamRolePSPostProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSReadProductKinesisStream"
+                },
+                {
+                    "Ref": "IamRolePSSaveProductKinesisStream"
+                }
+            ]
+        }
+    },
+    "IamPolicyPSSES": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+            "PolicyName": "IamPolicyPSSES",
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Action": [
+                        "SES:SendEmail",
+                        "SES:SendRawEmail"
+                    ],
+                    "Resource": "*"
+                }]
+            },
+            "Roles": [{
+                "Ref": "IamRoleCuratorEnrollment"
+            }]
+        }
+    },
+    "SQSPolicyPSAcceptOrderErrorSQS": {
+        "Type": "AWS::SQS::QueuePolicy",
+        "Properties": {
+            "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "SQS:*",
+                    "Resource": "*",
+                    "Condition": {
+                        "ArnEquals": {
+                            "aws:SourceArn": {
+                                "Ref": "AcceptOrderErrorSNS"
+                            }
+                        }
+                    }
+                }]
+            },
+            "Queues": [{
+                "Ref": "AcceptOrderErrorSQS"
+            }]
+        }
+    },
+    "ApiGatewayMethodEnrollCuratorPost": {
+        "Type": "AWS::ApiGateway::Method",
+        "Properties": {
+            "AuthorizationType": "AWS_IAM"
+        }
+    }
+}
